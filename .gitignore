@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Database
+*.db
+*.sqlite3
+
+# Node.js
+node_modules/
+dist/
+build/
+.pnpm-store/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+backend/jalmitra.db
+backend/test_alert.py
+backend/test_alert2.py
+backend/test_db.py
+backend/test_login.py
+DEMO_CREDENTIALS.txt
