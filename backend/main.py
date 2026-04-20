@@ -101,6 +101,11 @@ class Admin(Base):
     department = Column(String(100), nullable=True)
     employee_id = Column(String(50), nullable=True, index=True)
     office_address = Column(String(255), nullable=True)
+    salary = Column(Integer, nullable=True)
+    residential_address = Column(String(255), nullable=True)
+    joining_date = Column(Date, nullable=True)
+    age = Column(Integer, nullable=True)
+    profile_bio = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -113,6 +118,7 @@ class Member(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     village_id = Column(Integer, ForeignKey("villages.id"), nullable=True)
+    city_id = Column(Integer, ForeignKey("cities.id"), nullable=True)
     full_name = Column(String(100), nullable=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     password = Column(String(255), nullable=False)
@@ -129,6 +135,7 @@ class Member(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     village = relationship("Village", back_populates="members")
+    city = relationship("City")
 
 
 class City(Base):
@@ -190,11 +197,25 @@ class Bill(Base):
     member = relationship("Member", back_populates="bills")
 
 
+class Worker(Base):
+    __tablename__ = "workers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    phone = Column(String(15), nullable=False)
+    skills = Column(String(255), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    complaints = relationship("Complaint", back_populates="worker")
+
+
 class Complaint(Base):
     __tablename__ = "complaints"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     member_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)
+    assigned_worker_id = Column(Integer, ForeignKey("workers.id"), nullable=True)
     type = Column(String(50), nullable=False)
     description = Column(Text, nullable=False)
     status = Column(String(20), nullable=False, default="pending")  # pending, in-progress, resolved
@@ -202,6 +223,20 @@ class Complaint(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     member = relationship("Member", back_populates="complaints")
+    worker = relationship("Worker", back_populates="complaints")
+    updates = relationship("ComplaintUpdate", back_populates="complaint", order_by="desc(ComplaintUpdate.created_at)")
+
+
+class ComplaintUpdate(Base):
+    __tablename__ = "complaint_updates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    complaint_id = Column(Integer, ForeignKey("complaints.id"), nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    progress_percent = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    complaint = relationship("Complaint", back_populates="updates")
 
 
 class Notification(Base):
@@ -216,6 +251,18 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     member = relationship("Member", back_populates="notifications")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    created_by_admin_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    created_by_admin = relationship("Admin")
 
 # Add to Member model relationship (forward ref handled by SQLAlchemy)
 Member.bills = relationship("Bill", back_populates="member", order_by="desc(Bill.created_at)")
@@ -260,6 +307,28 @@ def run_migrations() -> None:
         return {c["name"] for c in insp.get_columns(table)}
 
     alters: list[str] = []
+    
+    mc = cols("members")
+    if "city_id" not in mc:
+        alters.append("ALTER TABLE members ADD COLUMN city_id INT NULL AFTER village_id")
+
+    cc = cols("complaints")
+    if "assigned_worker_id" not in cc:
+        alters.append("ALTER TABLE complaints ADD COLUMN assigned_worker_id INT NULL AFTER member_id")
+
+    if "workers" in insp.get_table_names():
+        wc = cols("workers")
+        if "phone" not in wc:
+            alters.append("ALTER TABLE workers ADD COLUMN phone VARCHAR(15) NULL AFTER name")
+            alters.append("UPDATE workers SET phone = mobile WHERE mobile IS NOT NULL")
+        if "skills" not in wc:
+            alters.append("ALTER TABLE workers ADD COLUMN skills VARCHAR(255) NULL AFTER phone")
+            alters.append("UPDATE workers SET skills = role WHERE role IS NOT NULL")
+        if "is_active" not in wc:
+            alters.append("ALTER TABLE workers ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER skills")
+        if "created_at" not in wc:
+            alters.append("ALTER TABLE workers ADD COLUMN created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP AFTER is_active")
+
     ac = cols("admins")
     if "designation" not in ac:
         alters.append(
@@ -277,8 +346,18 @@ def run_migrations() -> None:
         alters.append(
             "ALTER TABLE admins ADD COLUMN office_address VARCHAR(255) NULL AFTER employee_id"
         )
+    if "salary" not in ac:
+        alters.append("ALTER TABLE admins ADD COLUMN salary INT NULL AFTER office_address")
+    if "residential_address" not in ac:
+        alters.append("ALTER TABLE admins ADD COLUMN residential_address VARCHAR(255) NULL AFTER salary")
+    if "joining_date" not in ac:
+        alters.append("ALTER TABLE admins ADD COLUMN joining_date DATE NULL AFTER residential_address")
+    if "age" not in ac:
+        alters.append("ALTER TABLE admins ADD COLUMN age INT NULL AFTER joining_date")
+    if "profile_bio" not in ac:
+        alters.append("ALTER TABLE admins ADD COLUMN profile_bio TEXT NULL AFTER age")
     if "notes" not in ac:
-        alters.append("ALTER TABLE admins ADD COLUMN notes TEXT NULL AFTER office_address")
+        alters.append("ALTER TABLE admins ADD COLUMN notes TEXT NULL AFTER profile_bio")
     if "is_active" not in ac:
         alters.append(
             "ALTER TABLE admins ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER notes"
@@ -401,6 +480,11 @@ def _admin_to_public(a: Admin) -> dict:
         "department": a.department,
         "employee_id": a.employee_id,
         "office_address": a.office_address,
+        "salary": a.salary,
+        "residential_address": a.residential_address,
+        "joining_date": a.joining_date.isoformat() if a.joining_date else None,
+        "age": a.age,
+        "profile_bio": a.profile_bio,
         "notes": a.notes,
         "is_active": a.is_active,
         "created_at": a.created_at.isoformat() if a.created_at else None,
@@ -412,7 +496,11 @@ def _admin_to_public(a: Admin) -> dict:
 def _member_to_public(m: Member, db: Session) -> dict:
     village_name = None
     village_location = None
-    if m.village_id:
+    if m.city_id:
+        c = db.query(City).filter(City.id == m.city_id).first()
+        village_name = c.name if c else None
+        village_location = c.district if c else None
+    elif m.village_id:
         v = db.query(Village).filter(Village.id == m.village_id).first()
         village_name = v.name if v else None
         village_location = v.location if v else None
@@ -423,8 +511,9 @@ def _member_to_public(m: Member, db: Session) -> dict:
         "mobile": m.mobile,
         "email": m.email,
         "alternate_mobile": m.alternate_mobile,
-        "village_id": m.village_id,
+        "village_id": m.city_id or m.village_id,
         "village_name": village_name,
+        "village_location": village_location,
         "address": m.address,
         "meter_id": m.meter_id,
         "consumer_number": m.consumer_number,
@@ -731,10 +820,26 @@ class ComplaintCreate(BaseModel):
 
 class ComplaintStatusUpdate(BaseModel):
     status: str
+    assigned_worker_id: int | None = None
+
+
+class ComplaintUpdateCreate(BaseModel):
+    message: str
+    progress_percent: int | None = Field(default=None, ge=0, le=100)
+
+class WorkerCreate(BaseModel):
+    name: str
+    phone: str
+    skills: str | None = None
 
 class NotificationCreate(BaseModel):
     member_id: int
     type: str
+    title: str
+    message: str
+
+
+class AnnouncementCreate(BaseModel):
     title: str
     message: str
 
@@ -806,6 +911,13 @@ def list_members(query: MemberListQuery = Depends(), db: Session = Depends(get_d
     q = q.order_by(Member.full_name, Member.id)
     members = q.all()
     return [_member_list_public(m, db) for m in members]
+
+
+@app.get("/api/admin/staff")
+def list_staff(db: Session = Depends(get_db), token: str = Depends(require_admin)):
+    """Admin: List all staff (admins)."""
+    admins = db.query(Admin).order_by(Admin.full_name, Admin.id).all()
+    return [_admin_to_public(a) for a in admins]
 
 
 @app.get("/api/admin/members/{member_id}")
@@ -998,6 +1110,7 @@ class MemberRegisterData(BaseModel):
     email: str | None = None
     alternate_mobile: str | None = None
     village_id: int | None = None
+    city_id: int | None = None
     address: str | None = None
     meter_id: str | None = None
     consumer_number: str | None = None
@@ -1123,6 +1236,7 @@ def register_member(data: MemberRegisterData, db: Session = Depends(get_db)):
         email=data.email,
         alternate_mobile=data.alternate_mobile,
         village_id=data.village_id,
+        city_id=data.city_id,
         address=data.address,
         meter_id=data.meter_id,
         consumer_number=data.consumer_number,
@@ -1546,7 +1660,23 @@ def create_complaint(data: ComplaintCreate, db: Session = Depends(get_db), token
 def list_member_complaints(db: Session = Depends(get_db), token: str = Depends(require_member)):
     member_id = int(token.removeprefix("mock-jwt-member-"))
     complaints = db.query(Complaint).filter(Complaint.member_id == member_id).order_by(Complaint.created_at.desc()).all()
-    return [{"id": c.id, "type": c.type, "description": c.description, "status": c.status, "date": c.created_at.date().isoformat()} for c in complaints]
+    out = []
+    for c in complaints:
+        last_update = c.updates[0] if c.updates else None
+        out.append(
+            {
+                "id": c.id,
+                "type": c.type,
+                "description": c.description,
+                "status": c.status,
+                "assigned_worker_id": c.assigned_worker_id,
+                "assigned_worker_name": c.worker.name if c.worker else None,
+                "last_update_message": last_update.message if last_update else None,
+                "last_update_percent": last_update.progress_percent if last_update else None,
+                "date": c.created_at.date().isoformat(),
+            }
+        )
+    return out
 
 @app.get("/api/admin/complaints")
 def list_admin_complaints(db: Session = Depends(get_db), token: str = Depends(require_admin)):
@@ -1554,13 +1684,26 @@ def list_admin_complaints(db: Session = Depends(get_db), token: str = Depends(re
     out = []
     for c in complaints:
         m = db.query(Member).filter(Member.id == c.member_id).first()
+        area = "Unknown Area"
+        if m:
+            if m.city_id:
+                area = m.city.name
+            elif m.village_id:
+                area = m.village.name
+        
+        last_update = c.updates[0] if c.updates else None
         out.append({
             "id": c.id,
             "member_id": c.member_id,
             "member_name": m.full_name or m.username if m else "Unknown",
+            "area": area,
+            "assigned_worker_id": c.assigned_worker_id,
+            "assigned_worker_name": c.worker.name if c.worker else "Unassigned",
             "type": c.type,
             "description": c.description,
             "status": c.status,
+            "last_update_message": last_update.message if last_update else None,
+            "last_update_percent": last_update.progress_percent if last_update else None,
             "date": c.created_at.date().isoformat()
         })
     return out
@@ -1570,9 +1713,173 @@ def update_complaint_status(complaint_id: int, data: ComplaintStatusUpdate, db: 
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    complaint.status = data.status
+    old_status = complaint.status
+    old_worker_id = complaint.assigned_worker_id
+    complaint.status = data.status.strip()
+    if data.assigned_worker_id is not None:
+        complaint.assigned_worker_id = data.assigned_worker_id
     db.commit()
+    db.refresh(complaint)
+
+    # Notify member on meaningful lifecycle changes.
+    if complaint.member_id:
+        if old_worker_id != complaint.assigned_worker_id and complaint.worker:
+            db.add(
+                Notification(
+                    member_id=complaint.member_id,
+                    type="complaint",
+                    title=f"Worker assigned for complaint #{complaint.id}",
+                    message=(
+                        f"{complaint.worker.name} has been assigned to your complaint. "
+                        f"Current status: {complaint.status}."
+                    ),
+                    is_read=False,
+                )
+            )
+            db.commit()
+        if old_status != complaint.status:
+            if complaint.status == "resolved":
+                db.add(
+                    Notification(
+                        member_id=complaint.member_id,
+                        type="complaint",
+                        title=f"Maintenance completed for complaint #{complaint.id}",
+                        message=(
+                            "Maintenance work is completed and your complaint is now resolved. "
+                            "Thank you for your patience."
+                        ),
+                        is_read=False,
+                    )
+                )
+                db.commit()
+            elif complaint.status == "in-progress":
+                db.add(
+                    Notification(
+                        member_id=complaint.member_id,
+                        type="complaint",
+                        title=f"Work started on complaint #{complaint.id}",
+                        message="The maintenance team has started work on your complaint.",
+                        is_read=False,
+                    )
+                )
+                db.commit()
     return {"message": "Status updated"}
+
+
+@app.get("/api/admin/complaints/{complaint_id}/updates")
+def list_complaint_updates_admin(
+    complaint_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_admin),
+):
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    updates = db.query(ComplaintUpdate).filter(ComplaintUpdate.complaint_id == complaint_id).order_by(ComplaintUpdate.created_at.desc()).all()
+    return [
+        {
+            "id": u.id,
+            "message": u.message,
+            "progress_percent": u.progress_percent,
+            "date": u.created_at.date().isoformat() if u.created_at else None,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in updates
+    ]
+
+
+@app.post("/api/admin/complaints/{complaint_id}/updates")
+def create_complaint_update_admin(
+    complaint_id: int,
+    data: ComplaintUpdateCreate,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_admin),
+):
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    msg = (data.message or "").strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="message is required")
+
+    upd = ComplaintUpdate(
+        complaint_id=complaint_id,
+        message=msg,
+        progress_percent=data.progress_percent,
+    )
+    db.add(upd)
+
+    # Optional: auto-bump to in-progress when a progress update is added.
+    if complaint.status == "pending":
+        complaint.status = "in-progress"
+
+    db.commit()
+    db.refresh(upd)
+
+    # Notify member about progress update.
+    db.add(
+        Notification(
+            member_id=complaint.member_id,
+            type="complaint",
+            title=f"Complaint update for #{complaint.id}",
+            message=(
+                f"{msg}"
+                + (
+                    f" (Progress: {data.progress_percent}%)."
+                    if data.progress_percent is not None
+                    else ""
+                )
+            ),
+            is_read=False,
+        )
+    )
+    db.commit()
+
+    return {"message": "Update added", "id": upd.id}
+
+
+@app.get("/api/member/complaints/{complaint_id}/updates")
+def list_complaint_updates_member(
+    complaint_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_member),
+):
+    member_id = int(token.removeprefix("mock-jwt-member-"))
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id, Complaint.member_id == member_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    updates = db.query(ComplaintUpdate).filter(ComplaintUpdate.complaint_id == complaint_id).order_by(ComplaintUpdate.created_at.desc()).all()
+    return [
+        {
+            "id": u.id,
+            "message": u.message,
+            "progress_percent": u.progress_percent,
+            "date": u.created_at.date().isoformat() if u.created_at else None,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in updates
+    ]
+
+@app.post("/api/admin/workers")
+def create_worker(data: WorkerCreate, db: Session = Depends(get_db), token: str = Depends(require_admin)):
+    worker = Worker(
+        name=data.name,
+        phone=data.phone,
+        skills=data.skills
+    )
+    db.add(worker)
+    db.commit()
+    db.refresh(worker)
+    return {"message": "Worker registered", "id": worker.id}
+
+@app.get("/api/admin/workers")
+def list_workers(db: Session = Depends(get_db), token: str = Depends(require_admin)):
+    workers = db.query(Worker).order_by(Worker.name).all()
+    return [
+        {"id": w.id, "name": w.name, "phone": w.phone, "skills": w.skills, "is_active": w.is_active}
+        for w in workers
+    ]
 
 @app.post("/api/admin/alerts")
 def send_alert(data: NotificationCreate, db: Session = Depends(get_db), token: str = Depends(require_admin)):
@@ -1611,3 +1918,47 @@ def mark_notification_read(notif_id: int, db: Session = Depends(get_db), token: 
         notif.is_read = True
         db.commit()
     return {"message": "Marked as read"}
+
+
+@app.post("/api/admin/announcements")
+def create_announcement(
+    data: AnnouncementCreate,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_admin),
+):
+    title = (data.title or "").strip()
+    message = (data.message or "").strip()
+    if not title or not message:
+        raise HTTPException(status_code=400, detail="title and message are required")
+
+    admin_id = int(token.removeprefix("mock-jwt-admin-"))
+    row = Announcement(
+        title=title,
+        message=message,
+        created_by_admin_id=admin_id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"message": "Announcement published", "id": row.id}
+
+
+@app.get("/api/announcements")
+def list_announcements(db: Session = Depends(get_db)):
+    rows = db.query(Announcement).order_by(Announcement.created_at.desc()).all()
+    return [
+        {
+            "id": a.id,
+            "title": a.title,
+            "message": a.message,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "date": a.created_at.date().isoformat() if a.created_at else None,
+            "created_by_admin_id": a.created_by_admin_id,
+            "created_by_name": (
+                (a.created_by_admin.full_name or a.created_by_admin.username)
+                if a.created_by_admin
+                else "Admin"
+            ),
+        }
+        for a in rows
+    ]

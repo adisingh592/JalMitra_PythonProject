@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/Card';
-import { FileText, Download, TrendingUp, Droplets } from 'lucide-react';
-import { Button } from '../../components/Button';
+import { FileText, TrendingUp, Droplets } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { apiUrl } from '../../lib/api';
 
@@ -40,18 +39,10 @@ export function AdminReports() {
   const s = dash?.summary;
   const eff = s && s.total_supplied_week > 0 ? (100 - (s.avg_loss_percent_week || 0)).toFixed(1) : '0';
 
-  const handleDownload = (label: string) => {
-    window.alert(`${label}: export uses live data in MySQL (water_daily_entries, cities). Use Workbench or API /api/water/entries`);
-  };
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl text-foreground">Reports & Analytics</h1>
-        <Button onClick={() => handleDownload('Complete')}>
-          <Download size={16} className="mr-2" />
-          Export note
-        </Button>
       </div>
 
       <div className="grid md:grid-cols-4 gap-6">
@@ -161,18 +152,6 @@ export function AdminReports() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Data sources</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            Figures come from <code className="text-xs">water_daily_entries</code> and <code className="text-xs">cities</code> in MySQL (
-            <code>jalmiktra</code>).
-          </p>
-          <p>Submitted rows apply to the previous calendar day (IST). Analytics use carry-forward when a day has no row.</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

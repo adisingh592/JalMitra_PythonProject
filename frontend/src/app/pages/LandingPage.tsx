@@ -49,9 +49,13 @@ export function LandingPage() {
                 <Button variant="outline" size="lg">View Demo</Button>
               </div>
             </div>
-            <div className="bg-card border border-border rounded-lg p-8">
-              <div className="aspect-video bg-muted rounded flex items-center justify-center">
-                <Droplets size={64} className="text-primary" />
+            <div className="bg-card border border-border rounded-lg p-2 shadow-xl overflow-hidden">
+              <div className="aspect-video bg-muted rounded flex items-center justify-center overflow-hidden">
+                <img 
+                  src="/hero-image.png" 
+                  alt="Smart Water Management System Illustration" 
+                  className="w-full h-full object-cover transition-transform hover:scale-105 duration-700"
+                />
               </div>
             </div>
           </div>

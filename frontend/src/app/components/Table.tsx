@@ -24,7 +24,7 @@ export function TableBody({ children }: { children: ReactNode }) {
 }
 
 export function TableRow({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <tr className={`border-b border-border ${className}`}>{children}</tr>;
+  return <tr className={`border-b border-border transition-colors duration-200 hover:bg-muted/50 ${className}`}>{children}</tr>;
 }
 
 export function TableHeader({ children, className = '' }: { children: ReactNode; className?: string }) {

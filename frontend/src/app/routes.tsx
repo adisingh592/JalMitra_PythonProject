@@ -10,6 +10,11 @@ import { AdminMaintenance } from './pages/admin/AdminMaintenance';
 import { AdminReports } from './pages/admin/AdminReports';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminAlerts } from './pages/admin/AdminAlerts';
+import { AdminStaff } from './pages/admin/AdminStaff';
+import { AdminMonitoring } from './pages/admin/AdminMonitoring';
+import { AdminUsers } from './pages/admin/AdminUsers';
+import { AdminProfile } from './pages/admin/AdminProfile';
+import { AdminAnnouncements } from './pages/admin/AdminAnnouncements';
 import { MemberLayout } from './pages/member/MemberLayout';
 import { MemberDashboard } from './pages/member/MemberDashboard';
 import { MemberUsage } from './pages/member/MemberUsage';
@@ -18,6 +23,8 @@ import { MemberPayments } from './pages/member/MemberPayments';
 import { MemberComplaints } from './pages/member/MemberComplaints';
 import { MemberNotifications } from './pages/member/MemberNotifications';
 import { MemberSchedule } from './pages/member/MemberSchedule';
+import { MemberProfile } from './pages/member/MemberProfile';
+import { MemberAnnouncements } from './pages/member/MemberAnnouncements';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 export const router = createBrowserRouter([
@@ -44,15 +51,16 @@ export const router = createBrowserRouter([
       { index: true, Component: AdminDashboard },
       { path: 'dashboard', Component: AdminDashboard },
       { path: 'data-entry', Component: AdminDataEntry },
-      { path: 'monitoring', Component: AdminDashboard },
+      { path: 'monitoring', Component: AdminMonitoring },
       { path: 'leakage', Component: AdminLeakage },
       { path: 'maintenance', Component: AdminMaintenance },
       { path: 'reports', Component: AdminReports },
-      { path: 'users', Component: AdminDashboard },
-      { path: 'inventory', Component: AdminDashboard },
+      { path: 'users', Component: AdminUsers },
       { path: 'alerts', Component: AdminAlerts },
-      { path: 'analytics', Component: AdminReports },
+      { path: 'announcements', Component: AdminAnnouncements },
       { path: 'settings', Component: AdminSettings },
+      { path: 'staff', Component: AdminStaff },
+      { path: 'profile', Component: AdminProfile },
     ],
   },
   {
@@ -70,7 +78,9 @@ export const router = createBrowserRouter([
       { path: 'payments', Component: MemberPayments },
       { path: 'complaints', Component: MemberComplaints },
       { path: 'notifications', Component: MemberNotifications },
+      { path: 'announcements', Component: MemberAnnouncements },
       { path: 'schedule', Component: MemberSchedule },
+      { path: 'profile', Component: MemberProfile },
     ],
   },
 ]);

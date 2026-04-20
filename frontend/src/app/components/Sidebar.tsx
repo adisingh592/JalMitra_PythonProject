@@ -23,10 +23,10 @@ export function Sidebar({ items }: SidebarProps) {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-2.5 mb-1 rounded transition-colors ${
+              className={`flex items-center gap-3 px-4 py-2.5 mb-1 rounded transition-all duration-200 ${
                 isActive
                   ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:translate-x-1'
               }`}
             >
               {item.icon && <span className="flex-shrink-0">{item.icon}</span>}

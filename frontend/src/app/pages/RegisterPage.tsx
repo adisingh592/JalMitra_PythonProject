@@ -8,13 +8,13 @@ import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { apiUrl } from '../lib/api';
 
-type Village = { id: number; name: string; location: string | null };
+type City = { id: number; name: string; district: string | null };
 
 export function RegisterPage() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<'admin' | 'member' | null>(null);
-  const [villages, setVillages] = useState<Village[]>([]);
+  const [villages, setVillages] = useState<City[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +47,7 @@ export function RegisterPage() {
   useEffect(() => {
     if (selectedRole !== 'member') return;
     axios
-      .get<Village[]>(apiUrl('/api/villages'))
+      .get<City[]>(apiUrl('/api/cities'))
       .then((res) => setVillages(res.data))
       .catch(() => setVillages([]));
   }, [selectedRole]);
@@ -120,7 +120,7 @@ export function RegisterPage() {
           mobile: mobile.trim(),
           email: memberEmail.trim() || null,
           alternate_mobile: alternateMobile.trim() || null,
-          village_id: villageId ? parseInt(villageId, 10) : null,
+          city_id: villageId ? parseInt(villageId, 10) : null,
           address: address.trim() || null,
           meter_id: meterId.trim() || null,
           consumer_number: consumerNumber.trim() || null,
@@ -344,7 +344,7 @@ export function RegisterPage() {
                       />
                     </div>
                     <div>
-                      <label className="block mb-2 text-foreground">Village (optional)</label>
+                      <label className="block mb-2 text-foreground">City / Service Area (optional)</label>
                       <select
                         value={villageId}
                         onChange={(e) => setVillageId(e.target.value)}
@@ -354,7 +354,7 @@ export function RegisterPage() {
                         {villages.map((v) => (
                           <option key={v.id} value={v.id}>
                             {v.name}
-                            {v.location ? ` (${v.location})` : ''}
+                            {v.district ? ` (${v.district})` : ''}
                           </option>
                         ))}
                       </select>

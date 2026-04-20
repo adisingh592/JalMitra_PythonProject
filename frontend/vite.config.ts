@@ -6,15 +6,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   server: {
     proxy: {
-      // Dev: browser calls /api/* → FastAPI on 8005 (avoids CORS and hardcoded URLs)
+      // Dev: browser calls /api/* -> FastAPI on 8000 (avoids CORS and hardcoded URLs)
       '/api': {
-        target: 'http://127.0.0.1:8005',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },
   },
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
+    // The React and Tailwind plugins are both required, even if
     // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),

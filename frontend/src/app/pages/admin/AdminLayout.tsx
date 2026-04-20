@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router';
 import { Navbar } from '../../components/Navbar';
 import { Sidebar } from '../../components/Sidebar';
-import { LayoutDashboard, FileInput, Activity, Droplets, Wrench, BarChart3, Users, Package, Bell, TrendingUp, Settings } from 'lucide-react';
+import { LayoutDashboard, FileInput, Activity, Droplets, Wrench, BarChart3, Users, User, Bell, Megaphone, Settings } from 'lucide-react';
 
 const sidebarItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -11,9 +11,9 @@ const sidebarItems = [
   { path: '/admin/maintenance', label: 'Maintenance', icon: <Wrench size={20} /> },
   { path: '/admin/reports', label: 'Reports', icon: <BarChart3 size={20} /> },
   { path: '/admin/users', label: 'Users', icon: <Users size={20} /> },
-  { path: '/admin/inventory', label: 'Inventory', icon: <Package size={20} /> },
+  { path: '/admin/staff', label: 'Staff Directory', icon: <User size={20} /> },
   { path: '/admin/alerts', label: 'Alerts', icon: <Bell size={20} /> },
-  { path: '/admin/analytics', label: 'Analytics', icon: <TrendingUp size={20} /> },
+  { path: '/admin/announcements', label: 'Announcements', icon: <Megaphone size={20} /> },
   { path: '/admin/settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 

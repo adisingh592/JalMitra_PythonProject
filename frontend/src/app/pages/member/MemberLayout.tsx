@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router';
 import { Navbar } from '../../components/Navbar';
 import { Sidebar } from '../../components/Sidebar';
-import { LayoutDashboard, Droplets, FileText, IndianRupee, MessageSquare, Bell, Calendar } from 'lucide-react';
+import { LayoutDashboard, Droplets, FileText, IndianRupee, MessageSquare, Bell, Calendar, Megaphone } from 'lucide-react';
 
 const sidebarItems = [
   { path: '/member/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -10,6 +10,7 @@ const sidebarItems = [
   { path: '/member/payments', label: 'Payments', icon: <IndianRupee size={20} /> },
   { path: '/member/complaints', label: 'Complaints', icon: <MessageSquare size={20} /> },
   { path: '/member/notifications', label: 'Notifications', icon: <Bell size={20} /> },
+  { path: '/member/announcements', label: 'Announcements', icon: <Megaphone size={20} /> },
   { path: '/member/schedule', label: 'Schedule', icon: <Calendar size={20} /> },
 ];
 

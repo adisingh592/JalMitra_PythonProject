@@ -49,6 +49,11 @@ def upsert_admin(db, username: str, password: str, **fields) -> None:
                 department=fields.get("department"),
                 employee_id=fields.get("employee_id"),
                 office_address=fields.get("office_address"),
+                salary=fields.get("salary"),
+                residential_address=fields.get("residential_address"),
+                joining_date=fields.get("joining_date"),
+                age=fields.get("age"),
+                profile_bio=fields.get("profile_bio"),
                 notes=fields.get("notes"),
                 is_active=True,
             )
@@ -154,6 +159,7 @@ def seed():
     v_c = db.query(Village).filter(Village.name == "Village C").first().id
     v_d = db.query(Village).filter(Village.name == "Village D").first().id
 
+    from datetime import date
     upsert_admin(
         db,
         DUMMY_ADMIN_USER,
@@ -165,7 +171,50 @@ def seed():
         department="Jal Mitra Operations",
         employee_id="ADM-DEMO-001",
         office_address="Block Office, Demo District",
+        salary=75000,
+        residential_address="123 Admin Quarters, Block A, City Center",
+        joining_date=date(2022, 5, 10),
+        age=34,
+        profile_bio="Lead systems administrator for Jal Mitra, overseeing daily ops and backend scaling.",
         notes="Seeded demo account — visible in MySQL table `admins`.",
+    )
+
+    upsert_admin(
+        db,
+        "admin2",
+        DUMMY_ADMIN_PASS,
+        full_name="Sanjay Gupta",
+        email="sanjay@jalmitra.local",
+        mobile="9876543211",
+        designation="Field Engineer",
+        department="Maintenance",
+        employee_id="ADM-FE-002",
+        office_address="Field Office, Zone East",
+        salary=45000,
+        residential_address="Flat 402, Sunrise Apartments",
+        joining_date=date(2023, 1, 15),
+        age=28,
+        profile_bio="Field engineer responsible for physical leakage inspections and hardware repairs.",
+        notes="",
+    )
+
+    upsert_admin(
+        db,
+        "admin3",
+        DUMMY_ADMIN_PASS,
+        full_name="Anjali Desai",
+        email="anjali@jalmitra.local",
+        mobile="9876543212",
+        designation="Operations Manager",
+        department="Management",
+        employee_id="ADM-MGR-003",
+        office_address="Main HQ, City Center",
+        salary=95000,
+        residential_address="Villa 12, Green Park",
+        joining_date=date(2021, 11, 1),
+        age=41,
+        profile_bio="Oversees regional village rollout and compliance auditing.",
+        notes="",
     )
 
     # Demo members
