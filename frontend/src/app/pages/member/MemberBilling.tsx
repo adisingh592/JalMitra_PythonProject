@@ -12,6 +12,22 @@ type MemberDetail = MemberProfile & {
   bills: BillData[];
 };
 
+type RazorpayOrderResponse = {
+  key_id: string;
+  currency: string;
+  order: {
+    id: string;
+    amount: number;
+    currency: string;
+  };
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
 function money(value?: number | null) {
   if (value === null || value === undefined) return 'Rs 0';
   return `Rs ${value.toLocaleString()}`;
@@ -21,20 +37,28 @@ export function MemberBilling() {
   const { token } = useAuth();
   const [memberDetail, setMemberDetail] = useState<MemberDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+
+  async function fetchMemberDetail(activeToken: string, cancelled = false) {
+    try {
+      const res = await axios.get<MemberDetail>(apiUrl('/api/member/profile'), {
+        headers: { Authorization: activeToken },
+      });
+      if (!cancelled) {
+        setMemberDetail(res.data);
+        setError(null);
+      }
+    } catch (err: unknown) {
+      const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null;
+      if (!cancelled) setError(typeof detail === 'string' ? detail : 'Could not load billing details.');
+    }
+  }
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     (async () => {
-      try {
-        const res = await axios.get<MemberDetail>(apiUrl('/api/member/profile'), {
-          headers: { Authorization: token },
-        });
-        if (!cancelled) setMemberDetail(res.data);
-      } catch (err: unknown) {
-        const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null;
-        if (!cancelled) setError(typeof detail === 'string' ? detail : 'Could not load billing details.');
-      }
+      await fetchMemberDetail(token, cancelled);
     })();
     return () => {
       cancelled = true;
@@ -42,10 +66,81 @@ export function MemberBilling() {
   }, [token]);
 
   const bills = memberDetail?.bills || [];
-  const currentBill = bills[0] ?? null;
+  const payableBill = bills.find((b) => !b.paid) ?? null;
+  const currentBill = payableBill ?? null;
+  const currentDueAmount = payableBill?.amount ?? 0;
 
-  const handlePayment = () => {
-    alert('Payment gateway is not connected yet, but your live bill data is loading from the backend.');
+  const handlePayment = async () => {
+    if (!token) return;
+    if (!payableBill) {
+      setError('No bill found to pay.');
+      return;
+    }
+    if (!window.Razorpay) {
+      setError('Razorpay checkout failed to load. Please refresh and try again.');
+      return;
+    }
+
+    setPaying(true);
+    setError(null);
+    try {
+      const orderRes = await axios.post<RazorpayOrderResponse>(
+        apiUrl('/api/member/payments/razorpay/order'),
+        { bill_id: payableBill.id },
+        { headers: { Authorization: token } },
+      );
+
+      const { key_id, currency, order } = orderRes.data;
+      const razorpay = new window.Razorpay({
+        key: key_id,
+        amount: order.amount,
+        currency: order.currency || currency,
+        name: 'Jal Mitra',
+        description: `Water Bill ${payableBill.period}`,
+        order_id: order.id,
+        prefill: {
+          name: memberDetail?.full_name ?? '',
+          email: memberDetail?.email ?? '',
+          contact: memberDetail?.mobile ?? '',
+        },
+        theme: { color: '#2563eb' },
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            await axios.post(
+              apiUrl('/api/member/payments/razorpay/verify'),
+              {
+                bill_id: payableBill.id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+              { headers: { Authorization: token } },
+            );
+            await fetchMemberDetail(token);
+            alert('Payment successful. Bill marked as paid.');
+          } catch (verifyErr: unknown) {
+            const detail = axios.isAxiosError(verifyErr) ? verifyErr.response?.data?.detail : null;
+            setError(typeof detail === 'string' ? detail : 'Payment completed but verification failed. Please contact support.');
+          } finally {
+            setPaying(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaying(false);
+          },
+        },
+      });
+      razorpay.open();
+    } catch (err: unknown) {
+      const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null;
+      setError(typeof detail === 'string' ? detail : 'Unable to start payment. Please try again.');
+      setPaying(false);
+    }
   };
 
   const handleDownload = (bill: BillData) => {
@@ -74,10 +169,10 @@ export function MemberBilling() {
               <CardTitle>Current Bill</CardTitle>
               <span
                 className={`rounded px-3 py-1 text-sm ${
-                  currentBill?.paid ? 'bg-secondary text-secondary-foreground' : 'bg-destructive text-destructive-foreground'
+                  currentBill ? 'bg-destructive text-destructive-foreground' : 'bg-secondary text-secondary-foreground'
                 }`}
               >
-                {currentBill ? (currentBill.paid ? 'Paid' : 'Unpaid') : 'No bill'}
+                {currentBill ? 'Unpaid' : 'No due'}
               </span>
             </div>
           </CardHeader>
@@ -88,7 +183,7 @@ export function MemberBilling() {
                   <div className="mb-2 text-sm text-muted-foreground">Amount Due</div>
                   <div className="flex items-center gap-2 text-5xl text-primary">
                     <IndianRupee size={40} />
-                    {currentBill ? currentBill.amount : 0}
+                    {currentDueAmount}
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">Due by {currentBill?.due_date || '-'}</div>
                 </div>
@@ -101,17 +196,17 @@ export function MemberBilling() {
                 </div>
                 <div className="flex justify-between text-foreground">
                   <span>Status:</span>
-                  <span>{currentBill ? (currentBill.paid ? 'Paid' : 'Pending') : '-'}</span>
+                  <span>{currentBill ? 'Pending' : 'No Pending Bill'}</span>
                 </div>
                 <div className="flex justify-between border-t border-border pt-3">
                   <span>Total Amount:</span>
-                  <span>{money(currentBill?.amount)}</span>
+                  <span>{money(currentDueAmount)}</span>
                 </div>
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button className="flex-1" onClick={handlePayment}>
-                  Pay Now
+                <Button className="flex-1" onClick={handlePayment} disabled={!currentBill || paying}>
+                  {paying ? 'Processing...' : 'Pay Now'}
                 </Button>
                 {currentBill && (
                   <Button variant="outline" onClick={() => handleDownload(currentBill)}>

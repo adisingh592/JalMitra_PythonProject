@@ -3,7 +3,15 @@ from __future__ import annotations
 import os
 import secrets
 import json
+import hmac
+import hashlib
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load environment variables from backend/.env (if present).
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 
 try:
     from zoneinfo import ZoneInfo
@@ -577,6 +585,43 @@ def _member_detail_public(m: Member, db: Session) -> dict:
 
 
 
+def _payment_method_from_bill_notes(notes: str | None) -> str:
+    text = (notes or "").lower()
+    if "razorpay" in text:
+        return "Razorpay"
+    return "Unknown"
+
+
+def _bill_to_payment_row(
+    b: Bill,
+    member_name: str | None = None,
+    member_username: str | None = None,
+    member_mobile: str | None = None,
+    consumer_number: str | None = None,
+    address: str | None = None,
+    village_name: str | None = None,
+) -> dict:
+    return {
+        "bill_id": b.id,
+        "member_id": b.member_id,
+        "member_name": member_name,
+        "member_username": member_username,
+        "member_mobile": member_mobile,
+        "consumer_number": consumer_number,
+        "address": address,
+        "village_name": village_name,
+        "period": b.period,
+        "usage_liters": b.usage_liters,
+        "rate_per_liter": b.rate_per_liter,
+        "amount": b.amount,
+        "status": "paid" if b.paid else "pending",
+        "paid_date": b.paid_date.isoformat() if b.paid_date else None,
+        "due_date": b.due_date.isoformat() if b.due_date else None,
+        "method": _payment_method_from_bill_notes(b.notes),
+        "notes": b.notes,
+    }
+
+
 def yesterdays_entry_date() -> date:
     """Business rule: figures entered today apply to yesterday (IST)."""
     return datetime.now(TZ).date() - timedelta(days=1)
@@ -796,6 +841,17 @@ class BillEditData(BaseModel):
     due_date: str | None = None
     paid: bool | None = None
     notes: str | None = None
+
+
+class RazorpayOrderCreateData(BaseModel):
+    bill_id: int
+
+
+class RazorpayVerifyData(BaseModel):
+    bill_id: int
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 
 class BillGenerateData(BaseModel):
@@ -1332,7 +1388,193 @@ def member_bills(db: Session = Depends(get_db), token: str = Depends(require_mem
     member = db.query(Member).filter(Member.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
-    return _member_detail_public(member, db)["bills"]
+    bills = (
+        db.query(Bill)
+        .filter(Bill.member_id == member_id)
+        .order_by(Bill.period.desc())
+        .all()
+    )
+    return [
+        _bill_to_payment_row(
+            b,
+            member_name=member.full_name,
+            member_username=member.username,
+            member_mobile=member.mobile,
+            consumer_number=member.consumer_number,
+            address=member.address,
+            village_name=(member.city.name if member.city else member.village.name if member.village else None),
+        )
+        for b in bills
+    ]
+
+
+@app.get("/api/admin/payments/history")
+def admin_payments_history(
+    paid_only: bool = False,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_admin),
+):
+    q = db.query(Bill).join(Member).order_by(Bill.created_at.desc(), Bill.id.desc())
+    if paid_only:
+        q = q.filter(Bill.paid == True)  # noqa: E712
+    bills = q.all()
+    out: list[dict] = []
+    for b in bills:
+        m = b.member
+        out.append(
+            _bill_to_payment_row(
+                b,
+                member_name=(m.full_name if m else None),
+                member_username=(m.username if m else None),
+                member_mobile=(m.mobile if m else None),
+                consumer_number=(m.consumer_number if m else None),
+                address=(m.address if m else None),
+                village_name=(
+                    m.city.name
+                    if m and m.city
+                    else m.village.name
+                    if m and m.village
+                    else None
+                ),
+            )
+        )
+    return out
+
+
+@app.get("/api/admin/payments/summary")
+def admin_payments_summary(
+    db: Session = Depends(get_db),
+    token: str = Depends(require_admin),
+):
+    bills = db.query(Bill).all()
+    total_billed = sum(int(b.amount or 0) for b in bills)
+    total_collected = sum(int(b.amount or 0) for b in bills if b.paid)
+    total_pending = max(0, total_billed - total_collected)
+    paid_count = sum(1 for b in bills if b.paid)
+    pending_count = sum(1 for b in bills if not b.paid)
+    return {
+        "total_billed": total_billed,
+        "total_collected": total_collected,
+        "total_pending": total_pending,
+        "paid_bills": paid_count,
+        "pending_bills": pending_count,
+    }
+
+
+def _get_razorpay_config() -> tuple[str, str, str]:
+    key_id = os.getenv("RAZORPAY_KEY_ID", "").strip()
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+    currency = os.getenv("RAZORPAY_CURRENCY", "INR").strip().upper() or "INR"
+    if not key_id or not key_secret:
+        raise HTTPException(
+            status_code=500,
+            detail="Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+        )
+    return key_id, key_secret, currency
+
+
+def _build_razorpay_client():
+    try:
+        import razorpay
+    except Exception as ex:
+        raise HTTPException(
+            status_code=500,
+            detail="Razorpay SDK not installed. Run: pip install razorpay",
+        ) from ex
+
+    key_id, key_secret, _ = _get_razorpay_config()
+    return razorpay.Client(auth=(key_id, key_secret))
+
+
+@app.post("/api/member/payments/razorpay/order")
+def create_razorpay_order(
+    data: RazorpayOrderCreateData,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_member),
+):
+    member_id = int(token.removeprefix("mock-jwt-member-"))
+    bill = (
+        db.query(Bill)
+        .filter(Bill.id == data.bill_id, Bill.member_id == member_id)
+        .first()
+    )
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.paid:
+        raise HTTPException(status_code=400, detail="Bill is already paid")
+
+    key_id, _, currency = _get_razorpay_config()
+    client = _build_razorpay_client()
+    paise = int(bill.amount) * 100
+    order = client.order.create(
+        {
+            "amount": paise,
+            "currency": currency,
+            "receipt": f"bill-{bill.id}-{member_id}",
+            "notes": {"bill_id": str(bill.id), "member_id": str(member_id)},
+        }
+    )
+    return {
+        "message": "Razorpay order created",
+        "key_id": key_id,
+        "currency": currency,
+        "order": order,
+        "bill": {
+            "id": bill.id,
+            "period": bill.period,
+            "amount": bill.amount,
+            "paid": bill.paid,
+        },
+    }
+
+
+@app.post("/api/member/payments/razorpay/verify")
+def verify_razorpay_payment(
+    data: RazorpayVerifyData,
+    db: Session = Depends(get_db),
+    token: str = Depends(require_member),
+):
+    member_id = int(token.removeprefix("mock-jwt-member-"))
+    bill = (
+        db.query(Bill)
+        .filter(Bill.id == data.bill_id, Bill.member_id == member_id)
+        .first()
+    )
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.paid:
+        return {"message": "Bill already marked paid", "bill_id": bill.id}
+
+    _, key_secret, _ = _get_razorpay_config()
+    payload = f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode("utf-8")
+    expected_signature = hmac.new(
+        key_secret.encode("utf-8"), payload, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected_signature, data.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Invalid Razorpay signature")
+
+    bill.paid = True
+    bill.paid_date = datetime.utcnow()
+    signature_note = (
+        f"Razorpay payment_id={data.razorpay_payment_id}, order_id={data.razorpay_order_id}"
+    )
+    if bill.notes:
+        bill.notes = f"{bill.notes}\n{signature_note}"
+    else:
+        bill.notes = signature_note
+
+    db.commit()
+    db.refresh(bill)
+    return {
+        "message": "Payment verified and bill marked paid",
+        "bill": {
+            "id": bill.id,
+            "period": bill.period,
+            "amount": bill.amount,
+            "paid": bill.paid,
+            "paid_date": bill.paid_date.isoformat() if bill.paid_date else None,
+        },
+    }
 
 
 @app.get("/api/member/overview")
@@ -1962,3 +2204,205 @@ def list_announcements(db: Session = Depends(get_db)):
         }
         for a in rows
     ]
+
+
+# --------- Seed helpers merged from seed_db.py ----------
+DUMMY_ADMIN_USER = "admin"
+DUMMY_ADMIN_PASS = "jalmitra123"
+DUMMY_MEMBER_USER = "member1"
+DUMMY_MEMBER_PASS = "jalmitra123"
+DUMMY_MEMBER_MOBILE = "9999999991"
+
+
+def upsert_admin(db, username: str, password: str, **fields) -> None:
+    h = pwd_context.hash(password)
+    row = db.query(Admin).filter(Admin.username == username).first()
+    if row:
+        row.password = h
+        for k, v in fields.items():
+            if v is not None and hasattr(row, k):
+                setattr(row, k, v)
+    else:
+        db.add(
+            Admin(
+                username=username,
+                password=h,
+                full_name=fields.get("full_name"),
+                email=fields.get("email"),
+                mobile=fields.get("mobile"),
+                designation=fields.get("designation"),
+                department=fields.get("department"),
+                employee_id=fields.get("employee_id"),
+                office_address=fields.get("office_address"),
+                salary=fields.get("salary"),
+                residential_address=fields.get("residential_address"),
+                joining_date=fields.get("joining_date"),
+                age=fields.get("age"),
+                profile_bio=fields.get("profile_bio"),
+                notes=fields.get("notes"),
+                is_active=True,
+            )
+        )
+
+
+def upsert_member(db, username: str, password: str, **fields) -> None:
+    h = pwd_context.hash(password)
+    row = db.query(Member).filter(Member.username == username).first()
+    if row:
+        row.password = h
+        for k, v in fields.items():
+            if v is not None and hasattr(row, k):
+                setattr(row, k, v)
+    else:
+        db.add(
+            Member(
+                username=username,
+                password=h,
+                full_name=fields.get("full_name"),
+                mobile=fields.get("mobile"),
+                email=fields.get("email"),
+                alternate_mobile=fields.get("alternate_mobile"),
+                village_id=fields.get("village_id"),
+                address=fields.get("address"),
+                meter_id=fields.get("meter_id"),
+                consumer_number=fields.get("consumer_number"),
+                connection_type=fields.get("connection_type"),
+                remarks=fields.get("remarks"),
+                is_active=True,
+            )
+        )
+
+
+def upsert_bill(
+    db,
+    member_id: int,
+    period: str,
+    amount: int,
+    paid: bool = False,
+    usage_liters: int | None = None,
+    rate_per_liter: int | None = None,
+    **fields,
+) -> None:
+    row = db.query(Bill).filter(Bill.member_id == member_id, Bill.period == period).first()
+    usage = usage_liters if usage_liters is not None else amount * 10
+    rate = (
+        rate_per_liter
+        if rate_per_liter is not None
+        else max(1, round(amount / usage)) if usage > 0 else 1
+    )
+    if row:
+        row.amount = amount
+        row.paid = paid
+        row.usage_liters = usage
+        row.rate_per_liter = rate
+        for k, v in fields.items():
+            if v is not None and hasattr(row, k):
+                setattr(row, k, v)
+    else:
+        due = date.today().replace(day=5)
+        if due < date.today():
+            due = (date.today() + timedelta(days=30)).replace(day=5)
+        db.add(
+            Bill(
+                member_id=member_id,
+                period=period,
+                usage_liters=usage,
+                rate_per_liter=rate,
+                amount=amount,
+                due_date=due,
+                paid=paid,
+                **fields,
+            )
+        )
+
+
+def seed_demo_data() -> None:
+    db = SessionLocal()
+    try:
+        villages_data = [
+            {"name": "Village A", "location": "North zone"},
+            {"name": "Village B", "location": "South zone"},
+            {"name": "Village C", "location": "East zone"},
+            {"name": "Village D", "location": "West zone"},
+        ]
+        for v in villages_data:
+            if not db.query(Village).filter(Village.name == v["name"]).first():
+                db.add(Village(**v))
+        db.commit()
+
+        v_a = db.query(Village).filter(Village.name == "Village A").first().id
+        v_b = db.query(Village).filter(Village.name == "Village B").first().id
+        v_c = db.query(Village).filter(Village.name == "Village C").first().id
+
+        upsert_admin(
+            db,
+            DUMMY_ADMIN_USER,
+            DUMMY_ADMIN_PASS,
+            full_name="Demo Administrator",
+            email="admin@jalmitra.local",
+            mobile="9876543210",
+            designation="System Administrator",
+            department="Jal Mitra Operations",
+            employee_id="ADM-DEMO-001",
+            office_address="Block Office, Demo District",
+        )
+
+        upsert_member(
+            db,
+            "member1",
+            DUMMY_MEMBER_PASS,
+            full_name="Raj Patel",
+            mobile="9999999991",
+            email="raj@example.com",
+            village_id=v_a,
+            meter_id="MTR-001",
+            consumer_number="CN-001",
+            connection_type="domestic",
+        )
+        db.commit()
+        m1_id = db.query(Member).filter(Member.username == "member1").first().id
+
+        upsert_member(
+            db,
+            "member2",
+            DUMMY_MEMBER_PASS,
+            full_name="Priya Sharma",
+            mobile="9999999992",
+            email="priya@example.com",
+            village_id=v_b,
+            meter_id="MTR-002",
+            consumer_number="CN-002",
+            connection_type="commercial",
+        )
+        db.commit()
+        m2_id = db.query(Member).filter(Member.username == "member2").first().id
+
+        upsert_member(
+            db,
+            "member3",
+            DUMMY_MEMBER_PASS,
+            full_name="Amit Kumar",
+            mobile="9999999993",
+            email="amit@example.com",
+            village_id=v_c,
+            meter_id="MTR-003",
+            consumer_number="CN-003",
+            connection_type="domestic",
+        )
+        db.commit()
+        m3_id = db.query(Member).filter(Member.username == "member3").first().id
+
+        for mid in [m1_id, m2_id, m3_id]:
+            upsert_bill(db, mid, "2024-04", 285, paid=True, usage_liters=2850, rate_per_liter=1)
+            upsert_bill(db, mid, "2024-05", 320, paid=True, usage_liters=3200, rate_per_liter=1)
+            upsert_bill(db, mid, "2024-06", 350, paid=False, usage_liters=3500, rate_per_liter=1)
+
+        db.commit()
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    # `python main.py` will seed demo data in the same unified backend file.
+    seed_demo_data()
+    print("Demo seed complete.")

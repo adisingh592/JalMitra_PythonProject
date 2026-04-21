@@ -6,15 +6,18 @@ import { Navbar } from '../components/Navbar';
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const logoUrl = '/jalmitra-logo.jpg';
 
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-primary text-primary-foreground">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary-foreground text-primary rounded flex items-center justify-center">
-              JM
-            </div>
+            <img
+              src={logoUrl}
+              alt="JalMitra logo"
+              className="w-8 h-8 rounded object-cover bg-primary-foreground"
+            />
             <span>JalMitra</span>
           </div>
 
@@ -46,7 +49,6 @@ export function LandingPage() {
               </p>
               <div className="flex gap-4">
                 <Button size="lg" onClick={() => navigate('/register')}>Get Started</Button>
-                <Button variant="outline" size="lg">View Demo</Button>
               </div>
             </div>
             <div className="bg-card border border-border rounded-lg p-2 shadow-xl overflow-hidden">

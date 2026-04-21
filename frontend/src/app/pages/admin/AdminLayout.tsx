@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router';
 import { Navbar } from '../../components/Navbar';
 import { Sidebar } from '../../components/Sidebar';
-import { LayoutDashboard, FileInput, Activity, Droplets, Wrench, BarChart3, Users, User, Bell, Megaphone, Settings } from 'lucide-react';
+import { LayoutDashboard, FileInput, Activity, Droplets, Wrench, BarChart3, Users, User, Bell, Megaphone, Settings, IndianRupee } from 'lucide-react';
 
 const sidebarItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -14,6 +14,7 @@ const sidebarItems = [
   { path: '/admin/staff', label: 'Staff Directory', icon: <User size={20} /> },
   { path: '/admin/alerts', label: 'Alerts', icon: <Bell size={20} /> },
   { path: '/admin/announcements', label: 'Announcements', icon: <Megaphone size={20} /> },
+  { path: '/admin/payments', label: 'Payments', icon: <IndianRupee size={20} /> },
   { path: '/admin/settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 

@@ -15,6 +15,7 @@ import { AdminMonitoring } from './pages/admin/AdminMonitoring';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminProfile } from './pages/admin/AdminProfile';
 import { AdminAnnouncements } from './pages/admin/AdminAnnouncements';
+import { AdminPayments } from './pages/admin/AdminPayments';
 import { MemberLayout } from './pages/member/MemberLayout';
 import { MemberDashboard } from './pages/member/MemberDashboard';
 import { MemberUsage } from './pages/member/MemberUsage';
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
       { path: 'users', Component: AdminUsers },
       { path: 'alerts', Component: AdminAlerts },
       { path: 'announcements', Component: AdminAnnouncements },
+      { path: 'payments', Component: AdminPayments },
       { path: 'settings', Component: AdminSettings },
       { path: 'staff', Component: AdminStaff },
       { path: 'profile', Component: AdminProfile },
