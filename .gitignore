@@ -44,3 +44,9 @@ Thumbs.db
 
 # Backend local test scripts
 backend/test_*.py
+
+# Frontend template leftovers (not needed to run the app)
+frontend/guidelines/
+frontend/default_shadcn_theme.css
+frontend/pnpm-workspace.yaml
+frontend/ATTRIBUTIONS.md
