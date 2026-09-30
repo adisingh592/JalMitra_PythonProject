@@ -1,0 +1,27 @@
+# Jal Mitra - Python backend dependencies
+# Install:  pip install -r requirements.txt
+# Run:      cd backend && uvicorn main:app --reload
+
+# --- Web framework / server ---
+fastapi==0.136.0
+uvicorn==0.44.0
+pydantic==2.13.2
+
+# --- Database (MySQL via SQLAlchemy) ---
+SQLAlchemy==2.0.49
+PyMySQL==1.1.2
+cryptography==46.0.7        # required by PyMySQL for MySQL 8 auth
+
+# --- Auth / password hashing ---
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2               # keep <5: passlib 1.7.4 breaks with bcrypt>=5
+
+# --- Payments ---
+razorpay==2.0.1
+
+# --- Config / utilities ---
+python-dotenv==1.2.2
+tzdata==2026.1              # timezone data for zoneinfo on Windows
+
+# --- Testing (fastapi.testclient) ---
+httpx==0.28.1

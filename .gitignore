@@ -6,6 +6,7 @@
 !/.gitignore
 !/frontend/
 !/backend/
+!/requirements.txt
 
 # Scripts / local helpers (anywhere)
 *.bat
