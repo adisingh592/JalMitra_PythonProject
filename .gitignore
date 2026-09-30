@@ -1,3 +1,18 @@
+# ------------------------------------------------------------
+# Only track frontend/ and backend/ (database SQL lives in backend/sql/)
+# Ignore everything else at the repo root.
+# ------------------------------------------------------------
+/*
+!/.gitignore
+!/frontend/
+!/backend/
+
+# Scripts / local helpers (anywhere)
+*.bat
+*.cmd
+*.ps1
+*.log
+
 # Python
 __pycache__/
 *.py[cod]
@@ -6,15 +21,17 @@ venv/
 .venv/
 env/
 .env
+!.env.example
 
-# Database
+# Database files (SQL schema in backend/sql/ is kept)
 *.db
 *.sqlite3
 
-# Node.js
+# Node.js / Vite
 node_modules/
 dist/
 build/
+.vite/
 .pnpm-store/
 
 # IDEs
@@ -25,10 +42,5 @@ build/
 .DS_Store
 Thumbs.db
 
-# Project specific
-backend/jalmitra.db
-backend/test_alert.py
-backend/test_alert2.py
-backend/test_db.py
-backend/test_login.py
-DEMO_CREDENTIALS.txt
+# Backend local test scripts
+backend/test_*.py
